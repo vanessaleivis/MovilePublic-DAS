@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dimensions,
   SafeAreaView,
@@ -11,67 +11,38 @@ import {
   TouchableOpacity,
   View,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Svg, Path, Line, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { ventasService } from '../../../services/ventasService';
 
 const screenWidth = Dimensions.get('window').width;
 const CHART_WIDTH = screenWidth - 56;
 const CHART_HEIGHT = 90;
 
-type Category = 'productos' | 'servicios';
+export default function SemanalesScreen() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(null);
+  const [tooltip, setTooltip] = useState<{ visible: boolean; value: string; x?: number; y?: number }>({
+    visible: false,
+    value: '',
+  });
 
-type Item = {
-  icon: string;
-  bg: string;
-  name: string;
-  sub: string;
-  amt: string;
-  pct: string;
-  type: 'green' | 'red';
-};
+  useEffect(() => {
+    const fetchReport = async () => {
+      try {
+        const report = await ventasService.getWeeklyReport();
+        setData(report);
+      } catch (error) {
+        console.error('Error fetching weekly report:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchReport();
+  }, []);
 
-type ChartSet = {
-  values: number[];
-  labels: string[];
-  total: string;
-  trend: string;
-  trendColor: string;
-  trendBg: string;
-};
-
-const chartSets: Record<Category, ChartSet> = {
-  productos: {
-    values: [38, 52, 44, 60, 35, 72, 58, 48, 80, 55, 42, 68],
-    labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
-    total: '$21,536',
-    trend: '↑ 12.4%',
-    trendColor: '#15803d',
-    trendBg: '#dcfce7',
-  },
-  servicios: {
-    values: [30, 45, 38, 55, 42, 60, 50, 44, 65, 52, 48, 70],
-    labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
-    total: '$15,570',
-    trend: '↑ 18.2%',
-    trendColor: '#15803d',
-    trendBg: '#dcfce7',
-  },
-};
-
-const itemsData: Record<Category, Item[]> = {
-  productos: [
-    { icon: '📚', bg: '#EFF6FF', name: 'Books', sub: '$0 hoy', amt: '$0.00', pct: '↓ 100%', type: 'red' },
-    { icon: '🍕', bg: '#FFF7ED', name: 'Food & Drink', sub: '+$2,250 hoy', amt: '$391.25', pct: '↑ 7.8%', type: 'green' },
-    { icon: '💻', bg: '#F0FDF4', name: 'Electronics', sub: '+$5,230 hoy', amt: '$3,176.25', pct: '↑ 42.6%', type: 'green' },
-    { icon: '🏥', bg: '#FFF1F2', name: 'Health', sub: '+$1,200 hoy', amt: '$890.00', pct: '↓ 26.5%', type: 'red' },
-  ],
-  servicios: [
-    { icon: '☁️', bg: '#EFF6FF', name: 'Cloud Storage', sub: '+$880 hoy', amt: '$2,340.00', pct: '↑ 18.2%', type: 'green' },
-    { icon: '🎧', bg: '#F5F3FF', name: 'Streaming', sub: '+$320 hoy', amt: '$980.50', pct: '↑ 5.4%', type: 'green' },
-    { icon: '🔧', bg: '#FFF7ED', name: 'Mantenimiento', sub: '$0 hoy', amt: '$450.00', pct: '↓ 12.3%', type: 'red' },
-    { icon: '📱', bg: '#F0FDF4', name: 'SaaS Apps', sub: '+$1,100 hoy', amt: '$3,800.00', pct: '↑ 31.0%', type: 'green' },
-  ],
-};
 
 function smoothPath(pts: [number, number][], width: number, height: number): string {
   if (pts.length === 0) return '';
@@ -155,28 +126,32 @@ function AreaChart({ data, labels, onPointPress }: {
   );
 }
 
-export default function SemanalesScreen() {
-  const router = useRouter();
-  const [activeCat, setActiveCat] = useState<Category>('productos');
-  const [tooltip, setTooltip] = useState<{ visible: boolean; value: string; x?: number; y?: number }>({
-    visible: false,
-    value: '',
-  });
+// (Main component continue here)
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#1B365D" />
+          <Text style={styles.loadingText}>Cargando reporte semanal...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  const currentSet = chartSets[activeCat];
-  const currentItems = itemsData[activeCat];
-
-  const handlePointPress = (value: number, label: string, index: number) => {
-    const mockAmt = Math.round(value * 295);
-    setTooltip({ visible: true, value: `${label}: $${mockAmt.toLocaleString()}` });
-    setTimeout(() => setTooltip({ visible: false, value: '' }), 2000);
+  const chartData = data?.chartData || {
+    values: [0, 0, 0, 0, 0, 0, 0],
+    labels: ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'],
+    total: '$0',
+    trend: '0%',
   };
+
+  const itemsData = data?.productos || [];
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1B365D" />
 
-      {/* ── HEADER SIMPLE CON Bordes Curvos ── */}
+      {/* ── HEADER ── */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -184,7 +159,7 @@ export default function SemanalesScreen() {
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>Semanal</Text>
-            <Text style={styles.headerDate}>Feb 2026</Text>
+            <Text style={styles.headerDate}>{data?.periodo || 'periodo'}</Text>
           </View>
           <View style={styles.headerSpacer} />
         </View>
@@ -197,50 +172,26 @@ export default function SemanalesScreen() {
           <View style={styles.totalCardHeader}>
             <Text style={styles.totalCardLabel}>INGRESOS TOTALES</Text>
             <View style={styles.trendBadge}>
-              <Text style={styles.trendBadgeText}>{currentSet.trend}</Text>
+              <Text style={styles.trendBadgeText}>{chartData.trend}</Text>
             </View>
           </View>
-          <Text style={styles.totalAmount}>{currentSet.total}</Text>
+          <Text style={styles.totalAmount}>{chartData.total}</Text>
           
           {/* Gráfico */}
           <View style={styles.chartWrapper}>
-            <AreaChart data={currentSet.values} labels={currentSet.labels} onPointPress={handlePointPress} />
+            <AreaChart data={chartData.values} labels={chartData.labels} onPointPress={handlePointPress} />
           </View>
         </View>
 
-        {/* Tabs */}
-        <View style={styles.tabsContainer}>
-          <View style={styles.tabs}>
-            <TouchableOpacity
-              style={[styles.tab, activeCat === 'productos' && styles.tabActive]}
-              onPress={() => setActiveCat('productos')}
-            >
-              <Text style={[styles.tabText, activeCat === 'productos' && styles.tabTextActive]}>
-                Productos
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeCat === 'servicios' && styles.tabActive]}
-              onPress={() => setActiveCat('servicios')}
-            >
-              <Text style={[styles.tabText, activeCat === 'servicios' && styles.tabTextActive]}>
-                Servicios
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Section Title */}
-        <Text style={styles.sectionTitle}>
-          {activeCat === 'productos' ? 'Productos' : 'Servicios'}
-        </Text>
+        {/* Section Title - Solo Productos */}
+        <Text style={styles.sectionTitle}>Productos</Text>
 
         {/* Items List */}
         <View style={styles.itemsList}>
-          {currentItems.map((item, index) => (
+          {itemsData.length > 0 ? itemsData.map((item: any, index: number) => (
             <TouchableOpacity key={index} style={styles.item} activeOpacity={0.9}>
-              <View style={[styles.itemIcon, { backgroundColor: item.bg }]}>
-                <Text style={styles.itemIconText}>{item.icon}</Text>
+              <View style={[styles.itemIcon, { backgroundColor: item.bg || '#eee' }]}>
+                <Text style={styles.itemIconText}>{item.icon || '📦'}</Text>
               </View>
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.name}</Text>
@@ -255,11 +206,16 @@ export default function SemanalesScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-          ))}
+          )) : (
+            <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No hay productos registrados esta semana</Text>
+            </View>
+          )}
         </View>
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
 
       {/* Tooltip Modal */}
       <Modal transparent visible={tooltip.visible} animationType="fade" onRequestClose={() => setTooltip({ visible: false, value: '' })}>
@@ -279,8 +235,13 @@ const styles = StyleSheet.create({
     flex: 1, 
     backgroundColor: '#f5f7fa' 
   },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  loadingText: { marginTop: 10, color: '#1B365D', fontWeight: '500' },
+  emptyContainer: { padding: 20, alignItems: 'center' },
+  emptyText: { color: '#7a8fa6' },
 
-  /* ── HEADER SIMPLE CON Bordes Curvos ── */
+
+  /* ── HEADER ── */
   header: {
     backgroundColor: '#1B365D',
     paddingTop: 16,
@@ -301,10 +262,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)', 
     alignItems: 'center', 
     justifyContent: 'center',
+    marginTop: 20,
   },
   headerCenter: { 
     alignItems: 'center',
     flex: 1,
+    marginTop: 20,
   },
   headerTitle: { 
     fontSize: 20, 
@@ -318,7 +281,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   headerSpacer: { 
-    width: 40 
+    width: 40,
+    marginTop: 20,
   },
 
   /* ── BODY ── */
@@ -372,34 +336,6 @@ const styles = StyleSheet.create({
   },
   chartWrapper: {
     marginTop: 8,
-  },
-
-  /* Tabs Container */
-  tabsContainer: {
-    marginBottom: 20,
-  },
-  tabs: {
-    flexDirection: 'row',
-    backgroundColor: '#eef2fa',
-    borderRadius: 14,
-    padding: 4,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  tabActive: {
-    backgroundColor: '#1B365D',
-  },
-  tabText: {
-    fontSize: 13, 
-    fontWeight: '600', 
-    color: '#7a8fa6',
-  },
-  tabTextActive: {
-    color: '#fff',
   },
 
   /* Section Title */

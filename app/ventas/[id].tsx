@@ -1,8 +1,7 @@
-// ventas/[id].tsx
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Linking,
   SafeAreaView,
@@ -12,53 +11,22 @@ import {
   Text,
   TouchableOpacity,
   View,
+  FlatList,
+  ActivityIndicator,
 } from 'react-native';
-
-// 🔹 Tipo
-type Venta = {
-  VentaId: string;
-  Origen: 'pedido' | 'manual';
-  PedidoClienteId: string | null;
-  ClienteId: string;
-  ClienteNombre: string;
-  ClienteTelefono: string;
-  ClienteCorreo: string;
-  UsuarioVendedorId: string;
-  FechaVenta: string;
-  Subtotal: number;
-  IVA: number;
-  Total: number;
-  Estado: 'pagado' | 'anulado';
-};
-
-// 🔹 Datos de ejemplo (reemplazar con API call usando el ID)
-const DATA: Venta[] = [
-  {
-    VentaId: 'v1a2b3c4-d501-4e5f-8a9b-0c1d2e3f4a01',
-    Origen: 'pedido',
-    PedidoClienteId: 'f3a1b2c3-d401-4e5f-8a9b-0c1d2e3f4a01',
-    ClienteId: 'c1-0001',
-    ClienteNombre: 'Empresas S.A.S',
-    ClienteTelefono: '+57 601 555 0001',
-    ClienteCorreo: 'empresassas@gmail.com',
-    UsuarioVendedorId: 'u-001',
-    FechaVenta: '2025-04-21T10:32:00',
-    Subtotal: 407563.03,
-    IVA: 77436.97,
-    Total: 485000,
-    Estado: 'pagado',
-  },
-];
-
-const getDataById = (id: string): Venta | undefined => {
-  // En producción: fetch desde tu API
-  return DATA.find((d) => d.VentaId === id);
-};
+import { Venta, DetalleVenta, ventasService } from '../../services/ventasService';
 
 // 🔹 Helpers
 const SL: Record<Venta['Estado'], string> = {
   pagado: 'Pagado',
   anulado: 'Anulado',
+  pendiente: 'Pendiente',
+};
+
+const SC: Record<Venta['Estado'], { bg: string; text: string }> = {
+  pagado: { bg: '#D1FAE5', text: '#059669' },
+  anulado: { bg: '#FEE2E2', text: '#DC2626' },
+  pendiente: { bg: '#FEF3C7', text: '#D97706' },
 };
 
 const OR: Record<Venta['Origen'], string> = {
@@ -84,13 +52,51 @@ const formatDateFull = (dt: string) => {
 export default function VentaDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const venta = getDataById(id);
+  const [voucherExpanded, setVoucherExpanded] = useState(false);
+  const [venta, setVenta] = useState<Venta | null>(null);
+  const [detalles, setDetalles] = useState<DetalleVenta[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!venta) {
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [ventaData, detallesData] = await Promise.all([
+          ventasService.getVentaById(id),
+          ventasService.getDetallesByVentaId(id),
+        ]);
+        setVenta(ventaData);
+        setDetalles(detallesData);
+      } catch (err: any) {
+        setError(err.message || 'Error al cargar los datos');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id]);
+
+  if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>Venta no encontrada</Text>
+          <ActivityIndicator size="large" color="#1B365D" />
+          <Text style={styles.emptyText}>Cargando detalles...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !venta) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>{error || 'Venta no encontrada'}</Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>Volver</Text>
           </TouchableOpacity>
@@ -101,11 +107,44 @@ export default function VentaDetailScreen() {
 
   const statusColors = SC[venta.Estado];
 
+  const renderDetalleItem = ({ item, index }: { item: DetalleVenta; index: number }) => {
+    const isProducto = item.TipoItem === 'producto';
+    const icon = isProducto ? 'cube' : 'construct';
+    const iconBg = isProducto ? '#DBEAFE' : '#FEF3C7';
+    const iconColor = isProducto ? '#2563EB' : '#D97706';
+
+    return (
+      <View style={styles.detalleItem}>
+        <View style={[styles.detalleIcon, { backgroundColor: iconBg }]}>
+          <Ionicons name={icon as any} size={18} color={iconColor} />
+        </View>
+        <View style={styles.detalleContent}>
+          <View style={styles.detalleHeader}>
+            <Text style={styles.detalleNombre}>{item.NombreSnapshot}</Text>
+            <Text style={styles.detalleCantidad}>x{item.Cantidad}</Text>
+          </View>
+          {item.ColorId && (
+            <Text style={styles.detalleColor}>Color: {item.ColorId}</Text>
+          )}
+          {item.DescripcionPersonalizada && (
+            <Text style={styles.detalleDescripcion}>{item.DescripcionPersonalizada}</Text>
+          )}
+          <View style={styles.detalleFooter}>
+            <Text style={styles.detallePrecio}>
+              {formatPrice(item.PrecioUnitario)} {item.Descuento > 0 && `(-${item.Descuento}%)`}
+            </Text>
+            <Text style={styles.detalleSubtotal}>{formatPrice(item.Subtotal)}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1B365D" />
 
-      {/* Header con curva inferior */}
+      {/* Header simplificado con título "Detalle Venta" */}
       <LinearGradient
         colors={['#1B365D', '#2d4a73']}
         start={{ x: 0, y: 0 }}
@@ -113,16 +152,59 @@ export default function VentaDetailScreen() {
         style={styles.dheader}
       >
         <View style={styles.dhTop}>
-          {/* Botón volver */}
           <TouchableOpacity style={styles.dback} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={18} color="#ffffff" />
+            <Ionicons name="arrow-back" size={20} color="#ffffff" />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>Detalle Venta</Text>
+          <View style={styles.headerSpacer} />
         </View>
       </LinearGradient>
 
       {/* Body */}
       <ScrollView style={styles.dbody} showsVerticalScrollIndicator={false}>
-        
+
+        {/* Comprobante Desplegable */}
+        {venta.Voucher && (
+          <>
+            <TouchableOpacity
+              style={styles.voucherHeader}
+              onPress={() => setVoucherExpanded(!voucherExpanded)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.voucherHeaderLeft}>
+                <Ionicons name="document-text-outline" size={20} color="#1B365D" />
+                <Text style={styles.voucherTitle}>Comprobante</Text>
+              </View>
+              <Ionicons
+                name={voucherExpanded ? "chevron-up" : "chevron-down"}
+                size={20}
+                color="#1B365D"
+              />
+            </TouchableOpacity>
+
+            {voucherExpanded && (
+              <View style={styles.voucherContent}>
+                <View style={styles.voucherRow}>
+                  <Text style={styles.voucherLabel}>Número de comprobante:</Text>
+                  <Text style={styles.voucherValue}>{venta.Voucher}</Text>
+                </View>
+                <View style={styles.voucherRow}>
+                  <Text style={styles.voucherLabel}>Fecha:</Text>
+                  <Text style={styles.voucherValue}>{formatDateFull(venta.FechaVenta)}</Text>
+                </View>
+                <View style={styles.voucherRow}>
+                  <Text style={styles.voucherLabel}>Monto:</Text>
+                  <Text style={styles.voucherValue}>{formatPrice(venta.Total)}</Text>
+                </View>
+                <View style={styles.voucherDivider} />
+                <Text style={styles.voucherNote}>
+                  Este comprobante es válido como soporte de pago.
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+
         {/* Cliente */}
         <Text style={styles.secTitle}>Información del cliente</Text>
         <View style={styles.dcard}>
@@ -150,6 +232,21 @@ export default function VentaDetailScreen() {
             onPress={() => Linking.openURL(`tel:${venta.ClienteTelefono}`)}
           />
         </View>
+
+        {/* Detalle de venta (Productos/Servicios) */}
+        {detalles.length > 0 && (
+          <>
+            <Text style={styles.secTitle}>Detalle de la venta</Text>
+            <View style={styles.detalleCard}>
+              <FlatList
+                data={detalles}
+                renderItem={renderDetalleItem}
+                keyExtractor={(item) => item.DetalleVentaId}
+                scrollEnabled={false}
+              />
+            </View>
+          </>
+        )}
 
         {/* Origen y Vendedor */}
         <Text style={styles.secTitle}>Origen y vendedor</Text>
@@ -186,7 +283,7 @@ export default function VentaDetailScreen() {
           />
         </View>
 
-        {/* Fechas */}
+        {/* Fecha */}
         <Text style={styles.secTitle}>Fecha</Text>
         <View style={styles.dcard}>
           <DetailRow
@@ -228,6 +325,23 @@ export default function VentaDetailScreen() {
             </View>
           </View>
         </View>
+
+        {/* Motivo de anulación si existe */}
+        {venta.Estado === 'anulado' && venta.MotivoAnulacion && (
+          <>
+            <Text style={styles.secTitle}>Motivo de anulación</Text>
+            <View style={styles.dcard}>
+              <DetailRow
+                iconBg="#FEE2E2"
+                iconColor="#DC2626"
+                iconName="alert-circle"
+                label="Motivo"
+                value={venta.MotivoAnulacion}
+                isMultiline
+              />
+            </View>
+          </>
+        )}
 
         {/* IDs del sistema */}
         <Text style={styles.secTitle}>Identificadores del sistema</Text>
@@ -302,12 +416,6 @@ function DetailRow({
   );
 }
 
-// 🔹 Colores de estado para el detalle
-const SC: Record<Venta['Estado'], { bg: string; text: string }> = {
-  pagado: { bg: '#D1FAE5', text: '#059669' },
-  anulado: { bg: '#FEE2E2', text: '#DC2626' },
-};
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -315,7 +423,7 @@ const styles = StyleSheet.create({
   },
   dheader: {
     padding: 22,
-    paddingBottom: 35,
+    paddingBottom: 28,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     overflow: 'hidden',
@@ -332,22 +440,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 20,
   },
-  dhBottom: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  dhTitle: {
-    fontFamily: 'PlayfairDisplay_600Regular',
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  hvalue: {
-    fontSize: 24,
+  headerTitle: {
+    fontSize: 18,
     fontWeight: '700',
     color: '#ffffff',
+    marginTop: 20,
+  },
+  headerSpacer: {
+    width: 38,
+    marginTop: 20, 
   },
   // Body
   dbody: {
@@ -361,7 +464,8 @@ const styles = StyleSheet.create({
     color: '#7A8BAA',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginVertical: 8,
+    marginTop: 12,
+    marginBottom: 8,
   },
   dcard: {
     backgroundColor: '#ffffff',
@@ -373,10 +477,143 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  // Voucher desplegable
+  voucherHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 8,
+    shadowColor: '#1B365D',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  voucherHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  voucherTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1B365D',
+  },
+  voucherContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#1B365D',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  voucherRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  voucherLabel: {
+    fontSize: 12,
+    color: '#7A8BAA',
+    fontWeight: '500',
+  },
+  voucherValue: {
+    fontSize: 13,
+    color: '#1B365D',
+    fontWeight: '600',
+  },
+  voucherDivider: {
+    height: 1,
+    backgroundColor: '#DDE3EE',
+    marginVertical: 12,
+  },
+  voucherNote: {
+    fontSize: 11,
+    color: '#7A8BAA',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  detalleCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#1B365D',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  detalleItem: {
+    flexDirection: 'row',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DDE3EE',
+    gap: 12,
+  },
+  detalleIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detalleContent: {
+    flex: 1,
+  },
+  detalleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  detalleNombre: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1B365D',
+    flex: 1,
+  },
+  detalleCantidad: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#7A8BAA',
+  },
+  detalleColor: {
+    fontSize: 11,
+    color: '#7A8BAA',
+    marginBottom: 2,
+  },
+  detalleDescripcion: {
+    fontSize: 11,
+    color: '#7A8BAA',
+    fontStyle: 'italic',
+    marginBottom: 4,
+  },
+  detalleFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  detallePrecio: {
+    fontSize: 11,
+    color: '#7A8BAA',
+  },
+  detalleSubtotal: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1B365D',
+  },
   drow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    padding: 11,
+    padding: 12,
     gap: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#DDE3EE',

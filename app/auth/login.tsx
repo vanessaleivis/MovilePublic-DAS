@@ -1,10 +1,10 @@
-// LoginScreen.js
 export const unstable_settings = {
   initialRouteName: 'login',
 };
 
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useNavigation } from 'expo-router';
+import { authService } from '../../services/authService';
 import React, { useState, useLayoutEffect } from 'react';
 import {
   Alert,
@@ -29,19 +29,9 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // ✅ Simplificado: solo ocultar el header nativo
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
-    
-    const parent = navigation.getParent();
-    if (parent) {
-      parent.setOptions({ tabBarStyle: { display: 'none' } });
-    }
-    
-    return () => {
-      if (parent) {
-        parent.setOptions({ tabBarStyle: { display: 'flex' } });
-      }
-    };
   }, [navigation]);
 
   const handleLogin = async () => {
@@ -53,7 +43,8 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await authService.login(email, password);
+      // Opcional: Guardar token en storage seguro
       router.replace('/(tabs)');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Error al iniciar sesión');
@@ -61,6 +52,7 @@ export default function Login() {
       setLoading(false);
     }
   };
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -151,7 +143,6 @@ export default function Login() {
               </Text>
             </TouchableOpacity>
 
-
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -162,21 +153,21 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5', // Fondo gris muy suave
+    backgroundColor: '#f5f5f5',
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24, //  Margen lateral en todo el contenido
+    paddingHorizontal: 24,
   },
 
   // 🔷 Header con mejor espaciado
   header: {
     alignItems: 'center',
-    paddingTop: 60,      //  Más espacio superior
-    paddingBottom: 40,   //  Más espacio antes del form
+    paddingTop: 60,
+    paddingBottom: 40,
   },
   logoContainer: {
     marginBottom: 20,
@@ -184,8 +175,8 @@ const styles = StyleSheet.create({
   checkCircle: {
     width: 100,
     height: 100,
-    backgroundColor: '#f0f0f0', // Gris claro
-    borderRadius: 50,           // Círculo perfecto
+    backgroundColor: '#f0f0f0',
+    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -212,13 +203,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // 🔷 Formulario - Card azul oscuro con MÁRGENES
+  // 🔷 Formulario - Card azul oscuro
   formContainer: {
     backgroundColor: '#1B365D',
     borderRadius: 32,
-    paddingHorizontal: 28,   //  Margen interno horizontal
-    paddingVertical: 35,     //  Margen interno vertical
-    marginBottom: 40,        //  Margen inferior
+    paddingHorizontal: 28,
+    paddingVertical: 35,
+    marginBottom: 40,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
@@ -227,7 +218,7 @@ const styles = StyleSheet.create({
   },
 
   inputGroup: {
-    marginBottom: 24, //  Más espacio entre inputs
+    marginBottom: 24,
   },
   inputLabel: {
     fontSize: 14,
@@ -292,17 +283,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     letterSpacing: 0.5,
-  },
-
-
-  forgotText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-  },
-  forgotLink: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
   },
 });

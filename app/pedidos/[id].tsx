@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Linking,
   SafeAreaView,
@@ -11,65 +11,17 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
+import { Pedido, pedidosService } from '../../services/pedidosService';
 
-// Tipo
-type Pedido = {
-  PedidoClienteId: string;
-  ClienteId: string;
-  FechaRegistro: string;
-  Total: number;
-  Estado: 'pendiente' | 'aprobado' | 'entregado' | 'cancelado';
-  MetodoPago: string;
-  NombreRecibe: string;
-  TelefonoEntrega: string;
-  DireccionEntrega: string;
-  Voucher: string | null;
-  ClienteNombre: string;
-  ClienteTelefono: string;
-  ClienteCorreo: string;
-  TipoCliente: 'registrado' | 'walkin';
-};
-
-// Datos de ejemplo (reemplazar con API call usando el ID)
-const getDataById = (id: string): Pedido | undefined => {
-  // En producción: fetch desde tu API
-  return DATA.find((d) => d.PedidoClienteId === id);
-};
-
-const DATA: Pedido[] = [
-  // ... mismos datos que en index.tsx
-  {
-    PedidoClienteId: 'f3a1b2c3-d401-4e5f-8a9b-0c1d2e3f4a01',
-    ClienteId: 'c1-0001',
-    FechaRegistro: '2025-04-21T10:32:00',
-    Total: 485000,
-    Estado: 'aprobado',
-    MetodoPago: 'transferencia',
-    NombreRecibe: 'Laura Martínez',
-    TelefonoEntrega: '+57 300 123 4567',
-    DireccionEntrega: 'Cra 15 #93-47 Apto 301, Bogotá',
-    Voucher: 'TXN-20250421-00441',
-    ClienteNombre: 'Empresas S.A.S',
-    ClienteTelefono: '+57 601 555 0001',
-    ClienteCorreo: 'empresassas@gmail.com',
-    TipoCliente: 'registrado',
-  },
-  // ... agregar más datos según necesites
-];
 
 // Helpers
-const SL: Record<Pedido['Estado'], string> = {
-  pendiente: 'Pendiente',
-  aprobado: 'Aprobado',
-  entregado: 'Entregado',
-  cancelado: 'Cancelado',
-};
-
 const formatPrice = (n: number) =>
   '$ ' + Number(n).toLocaleString('es-CO');
 
-const formatDateFull = (dt: string) => {
+const formatDateFull = (dt: string | undefined) => {
+  if (!dt) return '';
   const d = new Date(dt);
   return `${d.toLocaleDateString('es-CO', {
     day: '2-digit',
@@ -84,13 +36,42 @@ const formatDateFull = (dt: string) => {
 export default function PedidoDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const pedido = getDataById(id);
+  const [voucherExpanded, setVoucherExpanded] = useState(false);
+  const [pedido, setPedido] = useState<Pedido | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!pedido) {
+  useEffect(() => {
+    if (!id) return;
+    const fetchPedido = async () => {
+      try {
+        const data = await pedidosService.getPedidoById(id);
+        setPedido(data);
+      } catch (err: any) {
+        setError(err.message || 'Error al cargar el pedido');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPedido();
+  }, [id]);
+
+  if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>Pedido no encontrado</Text>
+          <ActivityIndicator size="large" color="#1B365D" />
+          <Text style={styles.emptyText}>Cargando pedido...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !pedido) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>{error || 'Pedido no encontrado'}</Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>Volver</Text>
           </TouchableOpacity>
@@ -103,8 +84,7 @@ export default function PedidoDetailScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1B365D" />
 
-      {/* Header */}
-      {/* Header con curva inferior */}
+      {/* Header - SIN ESTADO */}
       <LinearGradient
         colors={['#1B365D', '#2d4a73']}
         start={{ x: 0, y: 0 }}
@@ -112,23 +92,75 @@ export default function PedidoDetailScreen() {
         style={styles.dheader}
       >
         <View style={styles.dhTop}>
-          {/*  Izquierda: Botón volver */}
           <TouchableOpacity style={styles.dback} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={18} color="#ffffff" />
+            <Ionicons name="arrow-back" size={20} color="#ffffff" />
           </TouchableOpacity>
-
           <View style={styles.dhTitleContainer}>
             <Text style={styles.dhTitle}>Detalle Pedido</Text>
           </View>
-
-          {/* ✅ Derecha: Spacer para equilibrar el layout y centrar el título */}
-          <View style={{ width: 38 }} />
-
+          <View style={styles.headerSpacer} />
         </View>
       </LinearGradient>
 
       {/* Body */}
       <ScrollView style={styles.dbody} showsVerticalScrollIndicator={false}>
+
+        {/* Voucher Desplegable */}
+        <TouchableOpacity 
+          style={styles.voucherHeader}
+          onPress={() => setVoucherExpanded(!voucherExpanded)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.voucherHeaderLeft}>
+            <Ionicons name="document-text-outline" size={20} color="#1B365D" />
+            <Text style={styles.voucherTitle}>Comprobante de pago</Text>
+          </View>
+          <Ionicons 
+            name={voucherExpanded ? "chevron-up" : "chevron-down"} 
+            size={20} 
+            color="#1B365D" 
+          />
+        </TouchableOpacity>
+        
+        {voucherExpanded && (
+          <View style={styles.voucherContent}>
+            {pedido.Voucher ? (
+              <>
+                <View style={styles.voucherRow}>
+                  <Text style={styles.voucherLabel}>Número de comprobante:</Text>
+                  <Text style={styles.voucherValue}>{pedido.Voucher}</Text>
+                </View>
+                <View style={styles.voucherRow}>
+                  <Text style={styles.voucherLabel}>Método de pago:</Text>
+                  <Text style={styles.voucherValue}>
+                    {pedido.MetodoPago === 'transferencia' ? 'Transferencia bancaria' : 'Contra entrega'}
+                  </Text>
+                </View>
+                <View style={styles.voucherRow}>
+                  <Text style={styles.voucherLabel}>Fecha:</Text>
+                  <Text style={styles.voucherValue}>{formatDateFull(pedido.FechaPedido)}</Text>
+
+                </View>
+                <View style={styles.voucherRow}>
+                  <Text style={styles.voucherLabel}>Monto:</Text>
+                  <Text style={styles.voucherValue}>{formatPrice(pedido.Total)}</Text>
+                </View>
+                <View style={styles.voucherDivider} />
+                <Text style={styles.voucherNote}>
+                  Este comprobante es válido como soporte de pago. Conserve para cualquier reclamo.
+                </Text>
+              </>
+            ) : (
+              <View style={styles.noVoucherContainer}>
+                <Ionicons name="alert-circle-outline" size={32} color="#7A8BAA" />
+                <Text style={styles.noVoucherText}>No hay comprobante disponible</Text>
+                <Text style={styles.noVoucherSubtext}>
+                  El pago se realizará contra entrega
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Cliente */}
         <Text style={styles.secTitle}>Información del cliente</Text>
@@ -189,33 +221,6 @@ export default function PedidoDetailScreen() {
             value={pedido.DireccionEntrega}
             isMultiline
           />
-        </View>
-
-        {/* Pago */}
-        <Text style={styles.secTitle}>Pago</Text>
-        <View style={styles.dcard}>
-          <DetailRow
-            iconBg="#DBEAFE"
-            iconColor="#2563EB"
-            iconName="card"
-            label="Método de pago"
-            value={pedido.MetodoPago === 'transferencia' ? 'Transferencia' : 'Contra entrega'}
-          />
-          <View style={styles.drow}>
-            <View style={[styles.dicon, { backgroundColor: '#F0FDF4' }]}>
-              <Ionicons name="checkmark-circle" size={15} color="#16A34A" />
-            </View>
-            <View style={styles.dcontent}>
-              <Text style={styles.dlabel}>Voucher / Comprobante</Text>
-              {pedido.Voucher ? (
-                <View style={styles.voucherBox}>
-                  <Text style={styles.voucherText}>{pedido.Voucher}</Text>
-                </View>
-              ) : (
-                <Text style={styles.emptyVal}>Sin comprobante</Text>
-              )}
-            </View>
-          </View>
         </View>
 
         {/* IDs */}
@@ -291,14 +296,6 @@ function DetailRow({
   );
 }
 
-// Colores de estado para el detalle
-const SC: Record<Pedido['Estado'], { bg: string; text: string }> = {
-  pendiente: { bg: '#FEF3C7', text: '#D97706' },
-  aprobado: { bg: '#D1FAE5', text: '#059669' },
-  entregado: { bg: '#EDE9FE', text: '#7C3AED' },
-  cancelado: { bg: '#FEE2E2', text: '#DC2626' },
-};
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -306,7 +303,7 @@ const styles = StyleSheet.create({
   },
   dheader: {
     padding: 22,
-    paddingBottom: 35,
+    paddingBottom: 28,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     overflow: 'hidden',
@@ -314,6 +311,7 @@ const styles = StyleSheet.create({
   dhTop: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   dback: {
     width: 38,
@@ -322,23 +320,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 20, // 👈 AGREGADO: marginTop al botón de devolver
   },
   dhTitleContainer: {
-    flex: 1,           // ✅ Ocupa el espacio central
-    alignItems: 'center', // ✅ Centra el título
-    paddingHorizontal: 12, // ✅ Espacio para que no choque con los extremos
+    flex: 1,
+    alignItems: 'center',
   },
   dhTitle: {
     fontFamily: 'PlayfairDisplay_600Regular',
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    textAlign: 'center',
+    marginTop: 20, // 👈 AGREGADO: marginTop al título
   },
-  hvalue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#ffffff',
+  headerSpacer: {
+    width: 38,
+    marginTop: 20, // 👈 AGREGADO: para mantener simetría
   },
   // Body
   dbody: {
@@ -352,7 +349,8 @@ const styles = StyleSheet.create({
     color: '#7A8BAA',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginVertical: 8,
+    marginTop: 12,
+    marginBottom: 8,
   },
   dcard: {
     backgroundColor: '#ffffff',
@@ -364,10 +362,88 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  // Voucher desplegable
+  voucherHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#1B365D',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  voucherHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  voucherTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1B365D',
+  },
+  voucherContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#1B365D',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  voucherRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  voucherLabel: {
+    fontSize: 12,
+    color: '#7A8BAA',
+    fontWeight: '500',
+  },
+  voucherValue: {
+    fontSize: 13,
+    color: '#1B365D',
+    fontWeight: '600',
+  },
+  voucherDivider: {
+    height: 1,
+    backgroundColor: '#DDE3EE',
+    marginVertical: 12,
+  },
+  voucherNote: {
+    fontSize: 11,
+    color: '#7A8BAA',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  noVoucherContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  noVoucherText: {
+    fontSize: 14,
+    color: '#7A8BAA',
+    fontWeight: '500',
+  },
+  noVoucherSubtext: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
   drow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    padding: 11,
+    padding: 12,
     gap: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#DDE3EE',
@@ -403,11 +479,6 @@ const styles = StyleSheet.create({
   dvalueMultiline: {
     lineHeight: 20,
   },
-  emptyVal: {
-    color: '#7A8BAA',
-    fontStyle: 'italic',
-    fontWeight: '400',
-  },
   tbadge: {
     paddingHorizontal: 10,
     paddingVertical: 3,
@@ -420,20 +491,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
-  },
-  voucherBox: {
-    backgroundColor: '#EEF1F8',
-    borderWidth: 1,
-    borderColor: '#DDE3EE',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    padding: 7,
-    marginTop: 2,
-  },
-  voucherText: {
-    fontSize: 11,
-    fontFamily: 'monospace',
-    color: '#1B365D',
   },
   bottomSpacer: {
     height: 30,

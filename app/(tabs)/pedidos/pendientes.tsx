@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import BottomNavBar from '../../../components/BottomNavBar'; // Ajusta la ruta según tu estructura
 
 // 🔹 Tipo
 type PedidoPendiente = {
@@ -201,6 +202,9 @@ export default function PedidosPendientesScreen() {
           </View>
         }
       />
+
+      {/* ✅ Bottom NavBar - Agregado aquí */}
+      <BottomNavBar />
     </SafeAreaView>
   );
 }
@@ -208,9 +212,9 @@ export default function PedidosPendientesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#EEF1F8' },
   header: {
-    padding: 22, paddingBottom: 35, flexDirection: 'row', alignItems: 'center',
+    padding: 22, paddingBottom: 37, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28, overflow: 'hidden',
+    borderBottomRightRadius: 28, overflow: 'hidden', paddingTop: 38,
   },
   backBtn: {
     width: 38, height: 38, backgroundColor: 'rgba(255,255,255,0.12)',
@@ -235,7 +239,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   clearBtnText: { fontSize: 11, color: '#7A8BAA' },
-  content: { padding: 16 },
+  content: {
+    padding: 16,
+    paddingBottom: 90, // ✅ Espacio para que el navbar no tape el último elemento
+  },
   card: {
     backgroundColor: '#ffffff', borderRadius: 18, padding: 14, marginBottom: 10,
     flexDirection: 'row', gap: 12, shadowColor: '#1B365D',

@@ -10,110 +10,13 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
+    ActivityIndicator,
 } from 'react-native';
 
-// Tipos
-type Pedido = {
-  PedidoClienteId: string;
-  ClienteId: string;
-  FechaRegistro: string;
-  Total: number;
-  Estado: 'pendiente' | 'aprobado' | 'entregado' | 'cancelado';
-  MetodoPago: string;
-  NombreRecibe: string;
-  TelefonoEntrega: string;
-  DireccionEntrega: string;
-  Voucher: string | null;
-  ClienteNombre: string;
-  ClienteTelefono: string;
-  ClienteCorreo: string;
-  TipoCliente: 'registrado' | 'walkin';
-};
+import BottomNavBar from '../../../components/BottomNavBar';
 
-// Datos de ejemplo (reemplazar con tu API)
-const DATA: Pedido[] = [
-  {
-    PedidoClienteId: 'f3a1b2c3-d401-4e5f-8a9b-0c1d2e3f4a01',
-    ClienteId: 'c1-0001',
-    FechaRegistro: '2025-04-21T10:32:00',
-    Total: 485000,
-    Estado: 'aprobado',
-    MetodoPago: 'transferencia',
-    NombreRecibe: 'Laura Martínez',
-    TelefonoEntrega: '+57 300 123 4567',
-    DireccionEntrega: 'Cra 15 #93-47 Apto 301, Bogotá',
-    Voucher: 'TXN-20250421-00441',
-    ClienteNombre: 'Empresas S.A.S',
-    ClienteTelefono: '+57 601 555 0001',
-    ClienteCorreo: 'empresassas@gmail.com',
-    TipoCliente: 'registrado',
-  },
-  {
-    PedidoClienteId: 'f3a1b2c3-d401-4e5f-8a9b-0c1d2e3f4a02',
-    ClienteId: 'c1-0002',
-    FechaRegistro: '2025-04-19T14:08:00',
-    Total: 1230000,
-    Estado: 'pendiente',
-    MetodoPago: 'contra_entrega',
-    NombreRecibe: 'Carlos Ruiz',
-    TelefonoEntrega: '+57 310 987 6543',
-    DireccionEntrega: 'Av. El Dorado #69-76 Of. 204, Bogotá',
-    Voucher: null,
-    ClienteNombre: 'Tech Solutions Ltda',
-    ClienteTelefono: '+57 601 555 0002',
-    ClienteCorreo: 'contact@techsolutions.com',
-    TipoCliente: 'registrado',
-  },
-  {
-    PedidoClienteId: 'f3a1b2c3-d401-4e5f-8a9b-0c1d2e3f4a03',
-    ClienteId: 'c1-0003',
-    FechaRegistro: '2025-04-18T09:15:00',
-    Total: 320000,
-    Estado: 'entregado',
-    MetodoPago: 'transferencia',
-    NombreRecibe: 'Ana Gómez',
-    TelefonoEntrega: '+57 315 444 1122',
-    DireccionEntrega: 'Calle 80 #50-23 Piso 2, Medellín',
-    Voucher: 'TXN-20250418-00320',
-    ClienteNombre: 'Comercial del Norte',
-    ClienteTelefono: '+57 604 555 0003',
-    ClienteCorreo: 'ventas@comercialnorte.com',
-    TipoCliente: 'walkin',
-  },
-  {
-    PedidoClienteId: 'f3a1b2c3-d401-4e5f-8a9b-0c1d2e3f4a04',
-    ClienteId: 'c1-0004',
-    FechaRegistro: '2025-04-15T16:44:00',
-    Total: 750000,
-    Estado: 'pendiente',
-    MetodoPago: 'transferencia',
-    NombreRecibe: 'Mario López',
-    TelefonoEntrega: '+57 312 333 4455',
-    DireccionEntrega: 'Zona Industrial Calle 13 #36-45, Cali',
-    Voucher: 'TXN-20250415-00219',
-    ClienteNombre: 'Distribuidora Central',
-    ClienteTelefono: '+57 602 555 0004',
-    ClienteCorreo: 'info@distcentral.com',
-    TipoCliente: 'registrado',
-  },
-  {
-    PedidoClienteId: 'f3a1b2c3-d401-4e5f-8a9b-0c1d2e3f4a05',
-    ClienteId: 'c1-0005',
-    FechaRegistro: '2025-04-12T11:55:00',
-    Total: 195000,
-    Estado: 'cancelado',
-    MetodoPago: 'contra_entrega',
-    NombreRecibe: 'Sofía Vargas',
-    TelefonoEntrega: '+57 317 777 8899',
-    DireccionEntrega: 'Cra 27 #15-62, Barranquilla',
-    Voucher: null,
-    ClienteNombre: 'Inversiones del Sur',
-    ClienteTelefono: '+57 605 555 0005',
-    ClienteCorreo: 'contacto@inversursur.com',
-    TipoCliente: 'walkin',
-  },
-];
+import { Pedido, pedidosService } from '../../../services/pedidosService';
 
 // Paleta de colores para avatares
 const PAL = [
@@ -127,18 +30,22 @@ const PAL = [
 ];
 
 // Mapeo de estados
-const SL: Record<Pedido['Estado'], string> = {
+const SL: Record<string, string> = {
   pendiente: 'Pendiente',
   aprobado: 'Aprobado',
   entregado: 'Entregado',
   cancelado: 'Cancelado',
+  proceso: 'En Proceso',
+  completado: 'Completado',
 };
 
-const SC: Record<Pedido['Estado'], { bg: string; text: string }> = {
+const SC: Record<string, { bg: string; text: string }> = {
   pendiente: { bg: '#FEF3C7', text: '#D97706' },
   aprobado: { bg: '#D1FAE5', text: '#059669' },
   entregado: { bg: '#EDE9FE', text: '#7C3AED' },
   cancelado: { bg: '#FEE2E2', text: '#DC2626' },
+  proceso: { bg: '#DBEAFE', text: '#2563EB' },
+  completado: { bg: '#D1FAE5', text: '#059669' },
 };
 
 // Helpers
@@ -164,24 +71,39 @@ const formatDate = (dt: string) => {
 
 export default function PedidosListScreen() {
   const router = useRouter();
+  const [data, setData] = useState<Pedido[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('all');
 
-  const filters = ['all', 'pendiente', 'aprobado', 'entregado', 'cancelado'];
+  useEffect(() => {
+    const fetchPedidos = async () => {
+      try {
+        const pedidos = await pedidosService.getPedidos();
+        setData(pedidos);
+      } catch (error) {
+        console.error('Error fetching pedidos:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPedidos();
+  }, []);
+
+  const filters = ['all', 'pendiente', 'proceso', 'completado', 'cancelado'];
 
   // Filtrar datos
   const filteredData = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    return DATA.filter((d) => {
+    return data.filter((d: Pedido) => {
       const matchesFilter = activeFilter === 'all' || d.Estado === activeFilter;
       const matchesSearch =
         !q ||
         d.ClienteNombre.toLowerCase().includes(q) ||
-        d.ClienteCorreo.toLowerCase().includes(q) ||
         d.PedidoClienteId.toLowerCase().includes(q);
       return matchesFilter && matchesSearch;
     });
-  }, [searchQuery, activeFilter]);
+  }, [data, searchQuery, activeFilter]);
 
   const renderCard = ({ item, index }: { item: Pedido; index: number }) => {
     const palette = PAL[index % PAL.length];
@@ -232,7 +154,7 @@ export default function PedidosListScreen() {
               </Text>
             </View>
           </View>
-          <Text style={styles.cdate}>{formatDate(item.FechaRegistro)}</Text>
+          <Text style={styles.cdate}>{formatDate(item.FechaPedido)}</Text>
         </View>
 
         {/* Right column */}
@@ -273,7 +195,7 @@ export default function PedidosListScreen() {
           <Ionicons name="search" size={16} color="#7A8BAA" style={styles.sIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar por cliente, correo o ID…"
+            placeholder="Buscar por cliente o ID…"
             placeholderTextColor="#7A8BAA"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -305,7 +227,7 @@ export default function PedidosListScreen() {
                   activeFilter === f && styles.chipTextActive,
                 ]}
               >
-                {f === 'all' ? 'Todos' : SL[f as Pedido['Estado']]}
+                {f === 'all' ? 'Todos' : SL[f]}
               </Text>
             </TouchableOpacity>
           ))}
@@ -313,19 +235,29 @@ export default function PedidosListScreen() {
       </View>
 
       {/* List */}
-      <FlatList
-        data={filteredData}
-        renderItem={renderCard}
-        keyExtractor={(item) => item.PedidoClienteId}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📦</Text>
-            <Text style={styles.emptyText}>Sin resultados para tu búsqueda</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <View style={styles.empty}>
+          <ActivityIndicator size="large" color="#1B365D" />
+          <Text style={styles.emptyText}>Cargando pedidos...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredData}
+          renderItem={renderCard}
+          keyExtractor={(item) => item.PedidoClienteId}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyIcon}>📦</Text>
+              <Text style={styles.emptyText}>Sin resultados para tu búsqueda</Text>
+            </View>
+          }
+        />
+      )}
+
+      {/* ✅ Bottom NavBar - Agregado aquí */}
+      <BottomNavBar />
     </SafeAreaView>
   );
 }
@@ -335,7 +267,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#EEF1F8',
   },
-    header: {
+  header: {
     padding: 22,
     paddingBottom: 35,  
     flexDirection: 'row',
@@ -343,7 +275,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderBottomLeftRadius: 28,   
     borderBottomRightRadius: 28,
-    overflow: 'hidden'
+    overflow: 'hidden',
+    paddingTop: 45,
   },          
   backBtn: {
     width: 38,
@@ -354,7 +287,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    fontFamily: 'PlayfairDisplay_600Regular', // Requiere expo-font
+    fontFamily: 'PlayfairDisplay_600Regular',
     color: '#ffffff',
     fontSize: 21,
   },
@@ -431,6 +364,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+    paddingBottom: 90,
   },
   card: {
     backgroundColor: '#ffffff',

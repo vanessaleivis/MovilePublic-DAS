@@ -1,8 +1,7 @@
-// ventas/index.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   FlatList,
   SafeAreaView,
@@ -12,105 +11,11 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
+import BottomNavBar from '../../../components/BottomNavBar';
+import { Venta, ventasService } from '../../../services/ventasService';
 
-// 🔹 Tipos
-type Venta = {
-  VentaId: string;
-  Origen: 'pedido' | 'manual';
-  PedidoClienteId: string | null;
-  ClienteId: string;
-  ClienteNombre: string;
-  ClienteTelefono: string;
-  ClienteCorreo: string;
-  UsuarioVendedorId: string;
-  FechaVenta: string;
-  Subtotal: number;
-  IVA: number;
-  Total: number;
-  Estado: 'pagado' | 'anulado';
-};
-
-// 🔹 Datos de ejemplo (reemplazar con tu API)
-const DATA: Venta[] = [
-  {
-    VentaId: 'v1a2b3c4-d501-4e5f-8a9b-0c1d2e3f4a01',
-    Origen: 'pedido',
-    PedidoClienteId: 'f3a1b2c3-d401-4e5f-8a9b-0c1d2e3f4a01',
-    ClienteId: 'c1-0001',
-    ClienteNombre: 'Empresas S.A.S',
-    ClienteTelefono: '+57 601 555 0001',
-    ClienteCorreo: 'empresassas@gmail.com',
-    UsuarioVendedorId: 'u-001',
-    FechaVenta: '2025-04-21T10:32:00',
-    Subtotal: 407563.03,
-    IVA: 77436.97,
-    Total: 485000,
-    Estado: 'pagado',
-  },
-  {
-    VentaId: 'v1a2b3c4-d501-4e5f-8a9b-0c1d2e3f4a02',
-    Origen: 'manual',
-    PedidoClienteId: null,
-    ClienteId: 'c1-0002',
-    ClienteNombre: 'Tech Solutions Ltda',
-    ClienteTelefono: '+57 601 555 0002',
-    ClienteCorreo: 'contact@techsolutions.com',
-    UsuarioVendedorId: 'u-002',
-    FechaVenta: '2025-04-19T14:08:00',
-    Subtotal: 1033613.45,
-    IVA: 196386.55,
-    Total: 1230000,
-    Estado: 'pagado',
-  },
-  {
-    VentaId: 'v1a2b3c4-d501-4e5f-8a9b-0c1d2e3f4a03',
-    Origen: 'pedido',
-    PedidoClienteId: 'f3a1b2c3-d401-4e5f-8a9b-0c1d2e3f4a03',
-    ClienteId: 'c1-0003',
-    ClienteNombre: 'Comercial del Norte',
-    ClienteTelefono: '+57 604 555 0003',
-    ClienteCorreo: 'ventas@comercialnorte.com',
-    UsuarioVendedorId: 'u-001',
-    FechaVenta: '2025-04-18T09:15:00',
-    Subtotal: 268907.56,
-    IVA: 51092.44,
-    Total: 320000,
-    Estado: 'anulado',
-  },
-  {
-    VentaId: 'v1a2b3c4-d501-4e5f-8a9b-0c1d2e3f4a04',
-    Origen: 'manual',
-    PedidoClienteId: null,
-    ClienteId: 'c1-0004',
-    ClienteNombre: 'Distribuidora Central',
-    ClienteTelefono: '+57 602 555 0004',
-    ClienteCorreo: 'info@distcentral.com',
-    UsuarioVendedorId: 'u-003',
-    FechaVenta: '2025-04-15T16:44:00',
-    Subtotal: 630252.10,
-    IVA: 119747.90,
-    Total: 750000,
-    Estado: 'pagado',
-  },
-  {
-    VentaId: 'v1a2b3c4-d501-4e5f-8a9b-0c1d2e3f4a05',
-    Origen: 'manual',
-    PedidoClienteId: null,
-    ClienteId: 'c1-0005',
-    ClienteNombre: 'Inversiones del Sur',
-    ClienteTelefono: '+57 605 555 0005',
-    ClienteCorreo: 'contacto@inversursur.com',
-    UsuarioVendedorId: 'u-002',
-    FechaVenta: '2025-04-12T11:55:00',
-    Subtotal: 163865.55,
-    IVA: 31134.45,
-    Total: 195000,
-    Estado: 'anulado',
-  },
-];
-
-// 🔹 Paleta de colores para avatares
 const PAL = [
   { bg: '#EDE9FE', c: '#7C3AED' },
   { bg: '#D1FAE5', c: '#059669' },
@@ -125,11 +30,13 @@ const PAL = [
 const SL: Record<Venta['Estado'], string> = {
   pagado: 'Pagado',
   anulado: 'Anulado',
+  pendiente: 'Pendiente',
 };
 
 const SC: Record<Venta['Estado'], { bg: string; text: string }> = {
   pagado: { bg: '#D1FAE5', text: '#059669' },
   anulado: { bg: '#FEE2E2', text: '#DC2626' },
+  pendiente: { bg: '#FEF3C7', text: '#D97706' },
 };
 
 // 🔹 Mapeo de origen
@@ -161,15 +68,31 @@ const formatDate = (dt: string) => {
 
 export default function VentasListScreen() {
   const router = useRouter();
+  const [data, setData] = useState<Venta[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('all');
 
-  const filters = ['all', 'pagado', 'anulado'];
+  useEffect(() => {
+    const fetchVentas = async () => {
+      try {
+        const ventas = await ventasService.getVentas();
+        setData(ventas);
+      } catch (error) {
+        console.error('Error fetching ventas:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchVentas();
+  }, []);
+
+  const filters = ['all', 'pagado', 'pendiente', 'anulado'];
 
   // Filtrar datos
   const filteredData = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    return DATA.filter((d) => {
+    return data.filter((d) => {
       const matchesFilter = activeFilter === 'all' || d.Estado === activeFilter;
       const matchesSearch =
         !q ||
@@ -178,7 +101,7 @@ export default function VentasListScreen() {
         d.VentaId.toLowerCase().includes(q);
       return matchesFilter && matchesSearch;
     });
-  }, [searchQuery, activeFilter]);
+  }, [data, searchQuery, activeFilter]);
 
   const renderCard = ({ item, index }: { item: Venta; index: number }) => {
     const palette = PAL[index % PAL.length];
@@ -310,19 +233,29 @@ export default function VentasListScreen() {
       </View>
 
       {/* List */}
-      <FlatList
-        data={filteredData}
-        renderItem={renderCard}
-        keyExtractor={(item) => item.VentaId}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>💰</Text>
-            <Text style={styles.emptyText}>Sin resultados para tu búsqueda</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <View style={styles.empty}>
+          <ActivityIndicator size="large" color="#1B365D" />
+          <Text style={styles.emptyText}>Cargando ventas...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredData}
+          renderItem={renderCard}
+          keyExtractor={(item) => item.VentaId}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyIcon}>💰</Text>
+              <Text style={styles.emptyText}>Sin resultados para tu búsqueda</Text>
+            </View>
+          }
+        />
+      )}
+
+      {/* Bottom NavBar */}
+      <BottomNavBar />
     </SafeAreaView>
   );
 }
@@ -341,6 +274,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     overflow: 'hidden',
+    marginTop: 30,
   },
   backBtn: {
     width: 38,
@@ -428,6 +362,8 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+    paddingBottom: 90,
+    paddingTop: 8,
   },
   card: {
     backgroundColor: '#ffffff',
